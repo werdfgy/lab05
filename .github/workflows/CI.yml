@@ -1,0 +1,49 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+
+    runs-on: ${{matrix.os}}
+    env:
+      CXX: g++
+    steps:
+    - uses: actions/checkout@v6
+
+    - name: deps_install
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y lcov
+
+    - name: project_configure
+      run: |
+        cmake ${{github.workspace}} \
+          -B ${{github.workspace}}/build \
+          -D BUILD_TESTS=ON \
+          -D CMAKE_CXX_FLAGS="--coverage" \
+          -D CMAKE_EXE_LINKER_FLAGS="--coverage"
+
+    - name: project_build
+      run: cmake --build ${{github.workspace}}/build
+
+    - name: project_run_tests
+      working-directory: build
+      run: ctest --output-on-failure
+
+    - name: data_collect
+      run: |
+        lcov --capture --directory build --output-file cvg.info --rc lcov_branch_coverage=1 --ignore-errors mismatch,inconsistent
+        lcov --remove cvg.info '/usr/*' '*/tests/*' '*/build/*' --output-file cvgf.info
+
+    - name: Coveralls
+      uses: coverallsapp/github-action@v2
+      with:
+        path-to-lcov: cvgf.info
